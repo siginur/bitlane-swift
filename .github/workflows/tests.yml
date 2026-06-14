@@ -1,0 +1,45 @@
+name: Tests
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apple:
+    name: ${{ matrix.name }}
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Test (macOS)
+            command: swift test -v
+          - name: Test (iOS)
+            command: xcodebuild test -scheme BitLane -destination 'platform=iOS Simulator,name=iPhone 16' -quiet
+          - name: Test (tvOS)
+            command: xcodebuild test -scheme BitLane -destination 'platform=tvOS Simulator,name=Apple TV 4K (3rd generation)' -quiet
+          - name: Build (watchOS)
+            command: xcodebuild build -scheme BitLane -destination 'platform=watchOS Simulator,name=Apple Watch Series 10 (46mm)' -quiet
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift version
+        run: swift --version
+      - name: ${{ matrix.name }}
+        run: ${{ matrix.command }}
+
+  linux:
+    name: Test (Linux, Swift 5.5)
+    runs-on: ubuntu-latest
+    container:
+      image: swift:5.5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift version
+        run: swift --version
+      - name: Test
+        run: swift test -v
