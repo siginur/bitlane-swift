@@ -9,36 +9,66 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  apple:
+  macos:
+    name: Test (macOS)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Select latest Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+      - name: Swift version
+        run: swift --version
+      - name: Test
+        run: swift test -v
+
+  simulator:
     name: ${{ matrix.name }}
     runs-on: macos-15
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: Test (macOS)
-            command: swift test -v
           - name: Test (iOS)
-            command: xcodebuild test -scheme BitLane -destination 'platform=iOS Simulator,name=iPhone 16' -quiet
+            runtime: iOS
           - name: Test (tvOS)
-            command: xcodebuild test -scheme BitLane -destination 'platform=tvOS Simulator,name=Apple TV 4K (3rd generation)' -quiet
-          - name: Build (watchOS)
-            command: xcodebuild build -scheme BitLane -destination 'platform=watchOS Simulator,name=Apple Watch Series 10 (46mm)' -quiet
+            runtime: tvOS
+          - name: Test (watchOS)
+            runtime: watchOS
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+      - name: Select latest Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
       - name: Swift version
         run: swift --version
       - name: ${{ matrix.name }}
-        run: ${{ matrix.command }}
+        run: |
+          set -euo pipefail
+          runtime="${{ matrix.runtime }}"
+          udid=$(xcrun simctl list devices available --json \
+            | jq -r --arg rt "$runtime" \
+              '.devices
+                 | to_entries[]
+                 | select(.key | test("SimRuntime\\." + $rt + "-"))
+                 | .value[]
+                 | select(.isAvailable == true)
+                 | .udid' \
+            | head -n 1)
+          if [ -z "$udid" ]; then
+            echo "::error::No available $runtime simulator found"
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "Using $runtime simulator: $udid"
+          xcodebuild test -scheme BitLane -destination "id=$udid" -quiet
 
   linux:
     name: Test (Linux, Swift 5.5)
     runs-on: ubuntu-latest
     container:
-      image: swift:5.5
+      image: swift:5.5-focal
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Swift version
         run: swift --version
       - name: Test
