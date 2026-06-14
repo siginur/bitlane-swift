@@ -47,13 +47,14 @@ jobs:
           runtime="${{ matrix.runtime }}"
           udid=$(xcrun simctl list devices available --json \
             | jq -r --arg rt "$runtime" \
-              '.devices
-                 | to_entries[]
-                 | select(.key | test("SimRuntime\\." + $rt + "-"))
-                 | .value[]
-                 | select(.isAvailable == true)
-                 | .udid' \
-            | head -n 1)
+              'first(
+                 .devices
+                   | to_entries[]
+                   | select(.key | test("SimRuntime\\." + $rt + "-"))
+                   | .value[]
+                   | select(.isAvailable == true)
+                   | .udid
+               ) // empty')
           if [ -z "$udid" ]; then
             echo "::error::No available $runtime simulator found"
             xcrun simctl list devices available
